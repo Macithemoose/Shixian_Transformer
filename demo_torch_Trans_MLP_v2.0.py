@@ -36,21 +36,21 @@ start_time = time.time()
 ######################################################################################################################################################################
 ###################################################### Data Loading and Processing ###################################################################################
 # Define the path, load all the file names in the path, and sort the names
-path_data = "./Dataset/data_prepro"
+path_data = "/lab/mksimmon/Downloads/Shixian_Transformer/Dataset/data_prepro"
 dir_list_data = os.listdir(path_data)
 dir_list_data = sorted(dir_list_data)
 
-path_target = "./Dataset/target"
+path_target = "/lab/mksimmon/Downloads/Shixian_Transformer/Dataset/target"
 dir_list_target = os.listdir(path_target)
 dir_list_target = sorted(dir_list_target)
-print('All data and GT are matched: ', all([a[0:-9] == b[0:-11] for a, b in zip(dir_list_data, dir_list_target)]))
+print('All data and GT are matched: ', all([a[0:-4] == b[0:-4] for a, b in zip(dir_list_data, dir_list_target)]))
 
 
         
 ########################################################################################################################################################################            
 ################################################################### Training ###########################################################################################       
 N = len(dir_list_data) # batch size
-T = 711666 # Duration of data in frame
+T = 1500 # Duration of data in frame
 D = 48 # Degree of features - 48 features
 Compact_L = 1024
 epochs = 400

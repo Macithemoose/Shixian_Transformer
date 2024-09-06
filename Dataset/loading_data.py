@@ -5,6 +5,7 @@ import io
 import os
 import matplotlib.pyplot as plt
 import scipy.io
+import glob
 
 data_path = "/lab/mksimmon/Downloads/Shixian_Transformer/Dataset/data_prepro"
 target_path = "/lab/mksimmon/Downloads/Shixian_Transformer/Dataset/target"
@@ -35,12 +36,22 @@ def create_targets(num_snips, data_path, target_path):
     for file in range(1, (len(dir_list_data) + 1)): # since need a label for each control snip and each fasd snip
         if file <= num_snips:
             data = {'target': [1, 0]} #one-hot encoding for the control label, creating a .mat dictionary to be read by the model
-            file_path = os.path.join(target_path, f'control_snip{file}_target.mat')
+            file_path = os.path.join(target_path, f'control_snip{file}.mat')
             scipy.io.savemat(file_path, data)
         if file > num_snips:
             data = {'target' : [0, 1]} #one-hot encoding for the fasd label, creating a .mat dictionary to be read by the model
-            file_path = os.path.join(target_path, f'fasd_snip{file - num_snips}_target.mat') #starting the count over to match snips
+            file_path = os.path.join(target_path, f'fasd_snip{file - num_snips}.mat') #starting the count over to match snips
             scipy.io.savemat(file_path, data)
 
-load_snips(num_snips)
+def delete_incorrect(num_snips, target_path):
+    search_string = 'target'
+    files_to_delete = glob.glob(os.path.join(target_path, f'*{search_string}*'))
+    for file in files_to_delete:
+        try:
+            os.remove(file)
+        except Exception as e:
+            print(f'Error deleting file {file}: {e}')
+
+#load_snips(num_snips)
 create_targets(num_snips, data_path, target_path)
+#delete_incorrect(num_snips, target_path)
