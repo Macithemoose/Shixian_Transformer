@@ -50,7 +50,7 @@ print('All data and GT are matched: ', all([a[0:-4] == b[0:-4] for a, b in zip(d
 ########################################################################################################################################################################            
 ################################################################### Training ###########################################################################################       
 N = len(dir_list_data) # batch size
-T = 1500 # Duration of data in frame
+T = 1916 # Duration of data in frame
 D = 48 # Degree of features - 48 features, must be divisible by th number of heads
 Compact_L = 1024
 epochs = 400
@@ -98,6 +98,65 @@ val_1 = index_1[int(len(index_1)*train_ratio):int(len(index_1))]
 classifier_Transformer_model = Transformers_Encoder_Classifier(batch_size, slide_N, prepro_N, Overlap_rate, input_shape, num_heads, headsize, ff_dim, 
                                                                num_transformer_block, mlp_units, drop, mlp_drop, n_class,epochs,flag,
                                                                d_model,self_attn_numhead,sub_factor,Compact_L)
-classifier_Transformer_model = nn.DataParallel(classifier_Transformer_model, device_ids=[0,1,2,3])
+classifier_Transformer_model = nn.DataParallel(classifier_Transformer_model, device_ids=[0, 1]) #changed to only two devices  
 if cuda:
     classifier_Transformer_model.cuda()
+
+total_params = sum(p.numel() for p in classifier_Transformer_model.parameters())
+print(f"Number of trainable parameters: {total_params}")
+Weight=torch.Tensor(np.array([0.35,0.65]))
+if cuda:
+    Weight = Weight.cuda()
+
+loss_function = nn.CrossEntropyLoss(weight=Weight)
+optimizer = torch.optim.Adam(classifier_Transformer_model.parameters(), lr=learning_rate)
+my_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=decayRate)
+loss_history = {}
+#results = {}
+start_time = time.time()
+
+train_loss = []
+train_acc = []
+eval_loss = []
+eval_acc = []
+acc_val_best = 0
+
+for j in range(epochs):
+
+    # print the average epoch loss and accuracy
+    epoch_loss = 0;
+    epoch_acc = 0;
+    count = 0;
+    pos = 0
+    TP = 0
+    
+    ### Balancing the amount of each class
+    L = np.maximum(int(len(train_0)),int(len(train_1)))
+    index_0_train  = []
+    index_1_train = []
+    for k in range(int(np.floor(L/len(train_0)))):
+        index_0_train = np.concatenate((index_0_train, train_0[np.random.permutation(int(len(train_0)))]),axis=0)
+    index_0_train = np.concatenate((index_0_train,train_0[np.random.permutation(int(len(train_0)))[0:np.mod(L,len(train_0))]]),axis=0)
+    
+    for k in range(int(np.floor(L/len(train_1)))):
+        index_1_train = np.concatenate((index_1_train, train_1[np.random.permutation(int(len(train_1)))]),axis=0)
+    index_1_train = np.concatenate((index_1_train,index_1_train[np.random.permutation(int(len(train_1)))[0:np.mod(L,len(train_1))]]),axis=0) 
+    index_0_train = np.intc(index_0_train)
+    index_1_train = np.intc(index_1_train)
+    
+    classifier_Transformer_model.train()
+
+    for i in tqdm(range(0, 1)): 
+        count = count + 1   
+        sample_temp = np.zeros((batch_size,int(T/2),D))
+        target_temp = np.zeros((batch_size,n_class))
+        index_batch_0 = index_0_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
+        index_batch_1 = index_1_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
+        index_batch = np.concatenate((index_batch_0,index_batch_1),axis=0)
+        index_batch = index_batch[np.random.permutation(batch_size)]
+        sample_data = np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True)
+        first_obj = sample_data[0]
+        result = np.array([obj for obj in first_obj])
+        print(result.shape)
+        sample_temp[0] = np.expand_dims(result, 0)
+        target_temp[0] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'],0)

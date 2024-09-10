@@ -59,7 +59,7 @@ slide_N = 71 # Number of slide windows
 prepro_N = 20  # Number of sub-stack before embedding to transformers
 Overlap_rate = 0 # Overlapping ratio of slide windows
 input_shape = np.array([int(T/2), int(D)]) 
-num_heads = 5 # number of heads in multihead attention layer
+num_heads = 4 # number of heads in multihead attention layer
 headsize = 128 # degree of the variable tensor in self-attention
 ff_dim = 512  # degree of the variable in feed forward layer
 num_transformer_block = 6 # number of transformer encoder blocks
@@ -70,7 +70,7 @@ n_class = 2
 flag = 0 # Show input and output shape
 d_model = input_shape[1]
 #d_model = 128
-self_attn_numhead = 5
+self_attn_numhead = 4
 train_ratio = 0.8 # The ratio of training set in the whole data
 learning_rate = 5*1e-4
 decayRate = 0.98
@@ -98,7 +98,7 @@ val_1 = index_1[int(len(index_1)*train_ratio):int(len(index_1))]
 classifier_Transformer_model = Transformers_Encoder_Classifier(batch_size, slide_N, prepro_N, Overlap_rate, input_shape, num_heads, headsize, ff_dim, 
                                                                num_transformer_block, mlp_units, drop, mlp_drop, n_class,epochs,flag,
                                                                d_model,self_attn_numhead,sub_factor,Compact_L)
-classifier_Transformer_model = nn.DataParallel(classifier_Transformer_model, device_ids=[0,1,2,3])
+classifier_Transformer_model = nn.DataParallel(classifier_Transformer_model, device_ids=[0, 1])
 if cuda:
     classifier_Transformer_model.cuda()
     
@@ -146,19 +146,20 @@ for j in range(epochs):
     classifier_Transformer_model.train()
 
     for i in tqdm(range(int(np.floor(L/batch_size*n_class)))): 
-        count = count +1   
+        count = count + 1   
         sample_temp = np.zeros((batch_size,int(T/2),D))
+        print(sample_temp.shape)
         target_temp = np.zeros((batch_size,n_class))
         index_batch_0 = index_0_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
         index_batch_1 = index_1_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
         index_batch = np.concatenate((index_batch_0,index_batch_1),axis=0)
         index_batch = index_batch[np.random.permutation(batch_size)]
-        sample_temp[0] = np.expand_dims(loadmat(path_data+'/'+str(dir_list_data[index_batch[0]]))['data'],0)
+        sample_temp[0] = np.expand_dims(np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True), 0)
         target_temp[0] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'],0)
        
         for k in range(batch_size-1): # load in batchsize
-            sample_temp[k+1] = np.expand_dims(loadmat(path_data+'/'+str(dir_list_data[index_batch[k+1]]))['data'],0)
-            target_temp[k+1] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[k+1]]))['target'],0)
+            sample_temp[k+1] = np.expand_dims(loadmat(path_data+'/'+str(dir_list_data[index_batch[k+1]])), 0)
+            target_temp[k+1] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[k+1]]))['target'], 0)
         target_temp = np.expand_dims(target_temp,2)
         target_temp = np.repeat(target_temp,slide_N+1,axis=2) 
         sample_total = torch.Tensor(sample_temp)
