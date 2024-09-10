@@ -50,7 +50,7 @@ print('All data and GT are matched: ', all([a[0:-4] == b[0:-4] for a, b in zip(d
 ########################################################################################################################################################################            
 ################################################################### Training ###########################################################################################       
 N = len(dir_list_data) # batch size
-T = 1916 # Duration of data in frame
+T = 1024 # Duration of data in frame
 D = 48 # Degree of features - 48 features, must be divisible by th number of heads
 Compact_L = 1024
 epochs = 400

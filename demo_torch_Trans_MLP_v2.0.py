@@ -148,13 +148,15 @@ for j in range(epochs):
     for i in tqdm(range(int(np.floor(L/batch_size*n_class)))): 
         count = count + 1   
         sample_temp = np.zeros((batch_size,int(T/2),D))
-        print(sample_temp.shape)
         target_temp = np.zeros((batch_size,n_class))
         index_batch_0 = index_0_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
         index_batch_1 = index_1_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
         index_batch = np.concatenate((index_batch_0,index_batch_1),axis=0)
         index_batch = index_batch[np.random.permutation(batch_size)]
-        sample_temp[0] = np.expand_dims(np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True), 0)
+        sample_data = np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True)
+        first_obj = sample_data[0]
+        result = np.array([obj for obj in first_obj])
+        sample_temp[0] = np.expand_dims(result, 0)
         target_temp[0] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'],0)
        
         for k in range(batch_size-1): # load in batchsize

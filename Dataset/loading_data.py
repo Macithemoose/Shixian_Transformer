@@ -29,6 +29,7 @@ def load_snips(num_snips):
                     path = os.path.join(data_path, f'control_snip{snip}.npy')
                     loaded_array = np.load(npy_file,allow_pickle=True)
                     np.save(path, loaded_array)
+                
 
 def create_targets(num_snips, data_path, target_path):
     #format of each target: {"target": [1, 0]}
