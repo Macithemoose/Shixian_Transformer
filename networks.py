@@ -37,7 +37,7 @@ class Transformers_Encoder_Classifier(nn.Module):
 
     #Transformers Encoder Neural Network for a Classifier
 
-    def __init__(self, batchsize, slide_N, prepro_N, Overlap_rate, input_shape, num_heads, headsize, ff_dim, num_transformer_block, mlp_units,\
+    def __init__(self, batchsize, slide_N, prepro_N, Overlap_rate, input_shape, num_heads, headsize, ff_dim, num_transformer_block, mlp_units,
      drop, mlp_drop, n_class, epochs,flag,d_model,self_attn_numhead,sub_factor,Compact_L):
         super().__init__()
 
