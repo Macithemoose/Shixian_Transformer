@@ -36,30 +36,32 @@ start_time = time.time()
 ######################################################################################################################################################################
 ###################################################### Data Loading and Processing ###################################################################################
 # Define the path, load all the file names in the path, and sort the names
-path_data = "./Dataset/data_prepro"
+path_data = "/lab/mksimmon/Downloads/Dataset/data_padded"
 dir_list_data = os.listdir(path_data)
 dir_list_data = sorted(dir_list_data)
 
-path_target = "./Dataset/target"
+path_target = "/lab/mksimmon/Downloads/Dataset/target"
 dir_list_target = os.listdir(path_target)
 dir_list_target = sorted(dir_list_target)
-print('All data and GT are matched: ', all([a[0:-9] == b[0:-11] for a, b in zip(dir_list_data, dir_list_target)]))
+print('All data and GT are matched: ', all([a[0:-4] == b[0:-4] for a, b in zip(dir_list_data, dir_list_target)]))
 
 
         
 ########################################################################################################################################################################            
 ################################################################### Training ###########################################################################################       
 N = len(dir_list_data) # batch size
-T = 711666 # Duration of data in frame
+T = 3984 # Duration of data in frame
 D = 48 # Degree of features - 48 features
 Compact_L = 1024
-epochs = 400
+epochs = 50
+files_to_pick = 2 # For randomly picking snips to create batches
+people_to_pick = 4 # For randomly picking people's data from the files.
 batch_size = 8 # Require to be dividable by number of classes
 slide_N = 71 # Number of slide windows
 prepro_N = 20  # Number of sub-stack before embedding to transformers
 Overlap_rate = 0 # Overlapping ratio of slide windows
-input_shape = np.array([int(T/2), int(D)]) 
-num_heads = 5 # number of heads in multihead attention layer
+input_shape = np.array([int(T), int(D)]) 
+num_heads = 4 # number of heads in multihead attention layer
 headsize = 128 # degree of the variable tensor in self-attention
 ff_dim = 512  # degree of the variable in feed forward layer
 num_transformer_block = 6 # number of transformer encoder blocks
@@ -70,12 +72,13 @@ n_class = 2
 flag = 0 # Show input and output shape
 d_model = input_shape[1]
 #d_model = 128
-self_attn_numhead = 5
+self_attn_numhead = 4
 train_ratio = 0.8 # The ratio of training set in the whole data
 learning_rate = 5*1e-4
 decayRate = 0.98
 Lambda = 0.2 # The weight of minority part of the loss. Loss = (1-lambda)*Loss_major(final_pred, target) + lambda*Loss_minor(slide_pred, target)
 sub_factor = 8
+
 index = np.zeros((len(dir_list_data),n_class))
 for i in range(int(len(dir_list_data))):
     target = scipy.io.loadmat(path_target+'/'+str(dir_list_target[i]))
@@ -98,7 +101,7 @@ val_1 = index_1[int(len(index_1)*train_ratio):int(len(index_1))]
 classifier_Transformer_model = Transformers_Encoder_Classifier(batch_size, slide_N, prepro_N, Overlap_rate, input_shape, num_heads, headsize, ff_dim, 
                                                                num_transformer_block, mlp_units, drop, mlp_drop, n_class,epochs,flag,
                                                                d_model,self_attn_numhead,sub_factor,Compact_L)
-classifier_Transformer_model = nn.DataParallel(classifier_Transformer_model, device_ids=[0,1,2,3])
+classifier_Transformer_model = nn.DataParallel(classifier_Transformer_model, device_ids=[0, 1])
 if cuda:
     classifier_Transformer_model.cuda()
     
@@ -120,6 +123,7 @@ train_acc = []
 eval_loss = []
 eval_acc = []
 acc_val_best = 0    
+
 for j in range(epochs):
 
     # print the average epoch loss and accuracy
@@ -146,19 +150,37 @@ for j in range(epochs):
     classifier_Transformer_model.train()
 
     for i in tqdm(range(int(np.floor(L/batch_size*n_class)))): 
-        count = count +1   
-        sample_temp = np.zeros((batch_size,int(T/2),D))
+        count = count + 1   
+        # sample_temp = np.zeros((batch_size,int(T/2),D))
+        sample_temp = np.zeros((batch_size,T,D))
         target_temp = np.zeros((batch_size,n_class))
-        index_batch_0 = index_0_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
-        index_batch_1 = index_1_train[i*int(batch_size/n_class):(i+1)*int(batch_size/n_class)]
+        index_batch_0 = index_0_train[np.random.choice(len(index_0_train))]
+        index_batch_1 = index_1_train[np.random.choice(len(index_1_train))]
         index_batch = np.concatenate((index_batch_0,index_batch_1),axis=0)
-        index_batch = index_batch[np.random.permutation(batch_size)]
-        sample_temp[0] = np.expand_dims(loadmat(path_data+'/'+str(dir_list_data[index_batch[0]]))['data'],0)
-        target_temp[0] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'],0)
+        random_people = np.random.choice(47, 8, replace = False)
+        sample_data = np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True)
+        print(f"Shape of sample data: {sample_data.shape}")
+        first_person = sample_data[random_people[0]]
+        result = np.array([obj for obj in first_person])
+        print(result.shape)
+        sample_temp[0] = np.expand_dims(result, 0)
+        target_temp[0] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'], 0)
+        print(f"Sample temp shape: {sample_temp.shape}")
        
-        for k in range(batch_size-1): # load in batchsize
-            sample_temp[k+1] = np.expand_dims(loadmat(path_data+'/'+str(dir_list_data[index_batch[k+1]]))['data'],0)
-            target_temp[k+1] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[k+1]]))['target'],0)
+        for k in range(1, batch_size): # load in batchsize
+            # print("The current data path is ", path_data+'/'+str(dir_list_data[index_batch[k+1]]))
+            sample_data_control = np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True)
+            sample_data_fasd = np.load(f"{path_data}/{dir_list_data[index_batch[1]]}", allow_pickle = True)
+            if k < batch_size/n_class:
+                sample_obj = sample_data_control[random_people[k]]
+                result = np.array([obj for obj in sample_obj])
+                sample_temp[k] = np.expand_dims(result, 0)
+                target_temp[k] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'], 0)
+            if k >= btach_size/n_class:
+                sample_obj = sample_data_fasd[random_people[k]]
+                result = np.array([obj for obj in sample_obj])
+                sample_temp[k] = np.expand_dims(result, 0)
+                target_temp[k] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[1]]))['target'], 0)
         target_temp = np.expand_dims(target_temp,2)
         target_temp = np.repeat(target_temp,slide_N+1,axis=2) 
         sample_total = torch.Tensor(sample_temp)
