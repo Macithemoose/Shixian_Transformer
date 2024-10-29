@@ -40,11 +40,11 @@ path_data = "/lab/mksimmon/Downloads/Dataset/data_padded"
 dir_list_data = os.listdir(path_data)
 dir_list_data = sorted(dir_list_data)
 
+
 path_target = "/lab/mksimmon/Downloads/Dataset/target"
 dir_list_target = os.listdir(path_target)
 dir_list_target = sorted(dir_list_target)
 print('All data and GT are matched: ', all([a[0:-4] == b[0:-4] for a, b in zip(dir_list_data, dir_list_target)]))
-
 
         
 ########################################################################################################################################################################            
@@ -57,7 +57,7 @@ epochs = 50
 files_to_pick = 2 # For randomly picking snips to create batches
 people_to_pick = 4 # For randomly picking people's data from the files.
 batch_size = 8 # Require to be dividable by number of classes
-slide_N = 71 # Number of slide windows
+slide_N = 48 # Number of slide windows
 prepro_N = 20  # Number of sub-stack before embedding to transformers
 Overlap_rate = 0 # Overlapping ratio of slide windows
 input_shape = np.array([int(T), int(D)]) 
@@ -69,7 +69,7 @@ mlp_units = [512, 16]  # number of channels in MLP before classification
 drop = 0.4 
 mlp_drop = 0.4
 n_class = 2
-flag = 0 # Show input and output shape
+flag = 1 # Show input and output shape
 d_model = input_shape[1]
 #d_model = 128
 self_attn_numhead = 4
@@ -135,17 +135,20 @@ for j in range(epochs):
     
     ### Balancing the amount of each class
     L = np.maximum(int(len(train_0)),int(len(train_1)))
-    index_0_train  = []
-    index_1_train = []
-    for k in range(int(np.floor(L/len(train_0)))):
-        index_0_train = np.concatenate((index_0_train, train_0[np.random.permutation(int(len(train_0)))]),axis=0)
-    index_0_train = np.concatenate((index_0_train,train_0[np.random.permutation(int(len(train_0)))[0:np.mod(L,len(train_0))]]),axis=0)
+    # index_0_train  = []
+    # index_1_train = []
+    # for k in range(int(np.floor(L/len(train_0)))):
+    #     index_0_train = np.concatenate((index_0_train, train_0[np.random.permutation(int(len(train_0)))]),axis=0)
+    # index_0_train = np.concatenate((index_0_train,train_0[np.random.permutation(int(len(train_0)))[0:np.mod(L,len(train_0))]]),axis=0)
     
-    for k in range(int(np.floor(L/len(train_1)))):
-        index_1_train = np.concatenate((index_1_train, train_1[np.random.permutation(int(len(train_1)))]),axis=0)
-    index_1_train = np.concatenate((index_1_train,index_1_train[np.random.permutation(int(len(train_1)))[0:np.mod(L,len(train_1))]]),axis=0) 
-    index_0_train = np.intc(index_0_train)
-    index_1_train = np.intc(index_1_train)
+    # for k in range(int(np.floor(L/len(train_1)))):
+    #     index_1_train = np.concatenate((index_1_train, train_1[np.random.permutation(int(len(train_1)))]),axis=0)
+    # index_1_train = np.concatenate((index_1_train,index_1_train[np.random.permutation(int(len(train_1)))[0:np.mod(L,len(train_1))]]),axis=0) 
+    # index_0_train = np.intc(index_0_train)
+    # index_1_train = np.intc(index_1_train)
+
+    # print(index_0_train.shape)
+    # print(index_0_train.shape)
     
     classifier_Transformer_model.train()
 
@@ -154,18 +157,23 @@ for j in range(epochs):
         # sample_temp = np.zeros((batch_size,int(T/2),D))
         sample_temp = np.zeros((batch_size,T,D))
         target_temp = np.zeros((batch_size,n_class))
-        index_batch_0 = index_0_train[np.random.choice(len(index_0_train))]
-        index_batch_1 = index_1_train[np.random.choice(len(index_1_train))]
-        index_batch = np.concatenate((index_batch_0,index_batch_1),axis=0)
+
+        random_index = np.random.choice(len(train_0))
+
+        index_batch_0 = train_0[random_index]
+        index_batch_1 = train_1[random_index]
+
+        index_batch = [index_batch_0, index_batch_1]
+
         random_people = np.random.choice(47, 8, replace = False)
         sample_data = np.load(f"{path_data}/{dir_list_data[index_batch[0]]}", allow_pickle = True)
-        print(f"Shape of sample data: {sample_data.shape}")
+        #print(f"Shape of sample data: {sample_data.shape}")
         first_person = sample_data[random_people[0]]
         result = np.array([obj for obj in first_person])
-        print(result.shape)
+        #print(result.shape)
         sample_temp[0] = np.expand_dims(result, 0)
         target_temp[0] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'], 0)
-        print(f"Sample temp shape: {sample_temp.shape}")
+        #print(f"Sample temp shape: {sample_temp.shape}")
        
         for k in range(1, batch_size): # load in batchsize
             # print("The current data path is ", path_data+'/'+str(dir_list_data[index_batch[k+1]]))
@@ -176,7 +184,7 @@ for j in range(epochs):
                 result = np.array([obj for obj in sample_obj])
                 sample_temp[k] = np.expand_dims(result, 0)
                 target_temp[k] = np.expand_dims(loadmat(path_target+'/'+str(dir_list_target[index_batch[0]]))['target'], 0)
-            if k >= btach_size/n_class:
+            if k >= batch_size/n_class:
                 sample_obj = sample_data_fasd[random_people[k]]
                 result = np.array([obj for obj in sample_obj])
                 sample_temp[k] = np.expand_dims(result, 0)
@@ -185,16 +193,16 @@ for j in range(epochs):
         target_temp = np.repeat(target_temp,slide_N+1,axis=2) 
         sample_total = torch.Tensor(sample_temp)
         target_total = torch.Tensor(target_temp)
+
+        print(sample_total.shape)
+        # print(target_total.shape)
         if cuda:
             sample_total = sample_total.cuda()
             target_total = target_total.cuda()   
 
         Pred_minor, Pred_major = classifier_Transformer_model(sample_total)
-        #print("the shape of Pred_minor is",Pred_minor.shape)
-
-
-
-        #print("the shape of Pred_major is",Pred_major.shape)
+        print("the shape of Pred_minor is",Pred_minor.shape)
+        print("the shape of Pred_major is",Pred_major.shape)
         
         #print("target_total[:,:,0:slide_N]",target_total[:,:,0:slide_N].shape)
 

@@ -39,10 +39,11 @@ class Transformers_Encoder_Classifier(nn.Module):
 
     def __init__(self, batchsize, slide_N, prepro_N, Overlap_rate, input_shape, num_heads, headsize, ff_dim, num_transformer_block, mlp_units,
      drop, mlp_drop, n_class, epochs,flag,d_model,self_attn_numhead,sub_factor,Compact_L):
+
         super().__init__()
 
         class PositionalEncoding(nn.Module):
-            def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+            def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 3984):
                 super().__init__()
                 self.dropout = nn.Dropout(p=dropout)
 
@@ -62,6 +63,7 @@ class Transformers_Encoder_Classifier(nn.Module):
                 x = torch.permute(x, (1,0,2))
                 x = x + self.pe[:x.size(0)]
                 x = torch.permute(x, (1,0,2))
+                #print(x.shape)
                 return self.dropout(x)
 
         self.batchsize = batchsize
@@ -82,8 +84,8 @@ class Transformers_Encoder_Classifier(nn.Module):
         self.self_attn_numhead = self_attn_numhead
         self.flag = flag
         self.Compact_L = Compact_L
-        self.L1 = 5000
-        self.L2 = 5000*self.slide_N
+        self.L1 = 83
+        self.L2 = 3984
         self.factor = sub_factor
         self.factor2 = 16
         self.final_seq = self.input_shape[1]*int(self.Compact_L/self.factor2/self.factor2)*self.slide_N
@@ -91,11 +93,13 @@ class Transformers_Encoder_Classifier(nn.Module):
         # Self-attention with shared weights among sub-stack
         self.self_attention = nn.MultiheadAttention(embed_dim=self.d_model, num_heads=self.self_attn_numhead, batch_first=True)           
         # MLP with shared weights among substacks
+
+
         self.MLP = nn.Sequential(
             #nn.Linear(self.L1, self.L1/2),
             #nn.Dropout(self.drop),
             #nn.ReLU(inplace=True),
-            nn.Linear(int(self.L1), self.Compact_L, bias=False),
+            nn.Linear(83, self.Compact_L, bias=False),
         )
 
         # Positional encoding for each slide window
@@ -154,33 +158,45 @@ class Transformers_Encoder_Classifier(nn.Module):
         # Length of sub-stack
         # Self attention
         inputs_temp = inputs[:,0:self.L1,:] 
-        #print("Shape inputs_temp",inputs_temp.shape)
-        #print("Shape L1",self.L1)  
+
         # MLP
-        x_self_attention_total = torch.permute(inputs_temp, (0, 2, 1))           
+        x_self_attention_total = torch.permute(inputs_temp, (0, 2, 1))
+           
         x_MLP = self.MLP(x_self_attention_total)
-        #print("Shape x_MLP",x_MLP.shape)
+
         x_MLP = torch.permute(x_MLP, (0, 2, 1))                         
         x_MLP_total = self.pos_encoder(x_MLP)
+
         x_Trans_Encoder_MLP = self.transformer_encoder(x_MLP_total)
-        #print("x_Trans_Encoder_MLP.shape",x_Trans_Encoder_MLP.shape)
+
         x_Trans_Encoder_MLP = torch.permute(x_Trans_Encoder_MLP, (0, 2, 1))
-        #print(x_Trans_Encoder_MLP.shape)
+
         x_Trans_Encoder_MLP_total1 = self.MLP_sup1(x_Trans_Encoder_MLP)
+
         x_Trans_Encoder_MLP2 = self.MLP_sup2(x_Trans_Encoder_MLP_total1)
+
         x_Trans_Encoder_MLP_total2 = torch.unsqueeze(x_Trans_Encoder_MLP2,2)
-        #print('Shape x_Trans_Encoder_MLP_total1',x_Trans_Encoder_MLP_total1.shape)
+
         for j in range(self.slide_N-1):
             #inputs_temp = inputs[:,(j+2)*math.floor(inputs.shape[0]/self.slide_N)-self.L1:(j+2)*math.floor(inputs.shape[0]/self.slide_N),:]
-            inputs_temp = inputs[:,(j+2)*self.L1-self.L1:(j+2)*self.L1:]
-            x_self_attention_total = torch.permute(inputs_temp, (0, 2, 1))           
+            inputs_temp = inputs[:, j*math.floor(inputs.shape[1]/self.slide_N):(j+1)*math.floor(inputs.shape[1]/self.slide_N), :]
+            print("inputs temp in sliding window: ",inputs_temp.shape)
+            x_self_attention_total = torch.permute(inputs_temp, (0, 2, 1)) 
+            print("self attention total in SW: ", x_self_attention_total.shape)          
             x_MLP = self.MLP(x_self_attention_total)
+            print("x_MLP: ", x_MLP.shape)
             x_MLP = torch.permute(x_MLP, (0, 2, 1))                       
             x_MLP = self.pos_encoder(x_MLP)
+            print("x_MLP after PE: ", x_MLP.shape)
             x_Trans_Encoder_MLP = self.transformer_encoder(x_MLP)
+            print("After transformer_encoder: ", x_Trans_Encoder_MLP.shape)
             x_Trans_Encoder_MLP = torch.permute(x_Trans_Encoder_MLP, (0, 2, 1))
+            print("After permutation: ", x_Trans_Encoder_MLP.shape)
             x_Trans_Encoder_MLP = self.MLP_sup1(x_Trans_Encoder_MLP)
+            print("After MLP Sup1: ", x_Trans_Encoder_MLP.shape)
             x_Trans_Encoder_MLP2 = self.MLP_sup2(x_Trans_Encoder_MLP)
+            print("After MLP Sup2: ", x_Trans_Encoder_MLP2.shape)
+
             x_Trans_Encoder_MLP_total2 = torch.cat((x_Trans_Encoder_MLP_total2,torch.unsqueeze(x_Trans_Encoder_MLP2,2)), axis=2) 
             x_Trans_Encoder_MLP_total1 = torch.cat((x_Trans_Encoder_MLP_total1,x_Trans_Encoder_MLP), axis=1)
         #print('Shape x_Trans_Encoder_MLP_total1',x_Trans_Encoder_MLP_total1.shape) 
